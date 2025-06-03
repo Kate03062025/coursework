@@ -1,0 +1,104 @@
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.gridspec import GridSpec
+
+# КЭШ для динамики
+cache = {}
+
+def V(n, k, t):
+    total = n + k
+    if (total, t) in cache:
+        return cache[(total, t)]
+
+    if t == 0:
+        if total > c:
+            result = a * c - b * (total - c)
+        else:
+            s1 = 0
+            for x in range(0, c - total + 1):
+                if x < len(prob_X):
+                    s1 += a * (total + x) * prob_X[x]
+            s2 = 0
+            for x in range(c - total + 1, len(prob_X)):
+                s2 += prob_X[x]
+            result = s1 + a * c * s2
+    else:
+        result = 0
+        for r in range(len(crh)):      
+            for h in range(len(dh)):   
+                next_n = total - r + h
+                if next_n < 0:
+                    continue
+                prob = crh[r] * dh[h]
+                result += prob * V(next_n, 0, t - 1)
+    
+    cache[(total, t)] = result
+    return result
+
+# Параметры
+a = 100
+b = 1000
+c = 100
+n = 95
+prob_X = [0.30, 0.20, 0.20, 0.10, 0.05, 0.05, 0.03, 0.03, 0.02, 0.01, 0.01]
+crh = [0.7, 0.3]
+dh = [0.5, 0.5]
+
+# Значения t для сравнения
+t_values = [2, 5, 10]
+colors = ['#1f77b4', '#2ca02c', '#d62728']  # Синий, зеленый, красный
+k_values = list(range(0, 11))  # k от 0 до 10
+
+# Создаем фигуру с двумя областями: график и таблица
+fig = plt.figure(figsize=(12, 10))
+gs = GridSpec(2, 1, height_ratios=[3, 1], figure=fig)
+ax1 = fig.add_subplot(gs[0])  # Для графика
+ax2 = fig.add_subplot(gs[1])  # Для таблицы
+
+# Собираем данные для таблицы
+results_data = []
+for t, color in zip(t_values, colors):
+    cache.clear()  # Очищаем кэш для каждого t
+    revenues = [V(n, k, t) for k in k_values]
+    max_revenue = max(revenues)
+    best_k = k_values[revenues.index(max_revenue)]
+    results_data.append([t, best_k, round(max_revenue, 2)])
+    
+    # Строим график (без выделения точек пересечения)
+    ax1.plot(k_values, revenues, 'o-', color=color, 
+             label=f't = {t} дней', markersize=6, linewidth=2)
+
+# Настройка графика
+ax1.set_title('Оптимальное количество дополнительных бронирований', 
+              pad=20, fontsize=14, fontweight='bold')
+ax1.set_xlabel('Количество дополнительных бронирований (k)', fontsize=12)
+ax1.set_ylabel('Ожидаемый доход ($)', fontsize=12)
+ax1.grid(True, linestyle='--', alpha=0.6)
+ax1.set_xticks(k_values)
+ax1.legend(fontsize=12, framealpha=0.9)
+ax1.tick_params(axis='both', which='major', labelsize=10)
+
+# Создаем и настраиваем таблицу
+columns = ('Дней до рейса (t)', 'Оптимальное k', 'Максимальный доход ($)')
+ax2.axis('off')  # Отключаем оси для таблицы
+table = ax2.table(cellText=results_data,
+                 colLabels=columns,
+                 loc='center',
+                 cellLoc='center',
+                 colColours=['#f0f0f0']*3)
+
+# Стилизация таблицы
+table.auto_set_font_size(False)
+table.set_fontsize(12)
+table.scale(1, 2)  # Увеличиваем высоту ячеек
+
+# Выделяем заголовки таблицы
+for (i, j), cell in table.get_celld().items():
+    if i == 0:  # Заголовки
+        cell.set_text_props(weight='bold', color='white')
+        cell.set_facecolor('#4682b4')  # Синий цвет для заголовков
+    else:
+        cell.set_facecolor('#f9f9f9')  # Светлый фон для ячеек
+
+plt.tight_layout()
+plt.show()
