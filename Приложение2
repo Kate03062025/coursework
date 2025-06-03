@@ -1,0 +1,143 @@
+import numpy as np
+from tabulate import tabulate
+import matplotlib.pyplot as plt
+
+# Полная инициализация всех матриц
+states = ['A', 'B', 'C', 'D', 'E', 'O_1', 'O_2', 'O_3']  # Добавляем степени овербукинга
+state_idx = {s: i for i, s in enumerate(states)}
+
+# Полные матрицы переходов и доходов
+Q1 = np.array([
+    [0.50, 0.25, 0.10, 0.05, 0.05, 0.03, 0.01, 0.01],  # Из A возможен переход в O_1, O_2...
+    [0.25, 0.35, 0.15, 0.10, 0.05, 0.05, 0.03, 0.02],
+    [0.20, 0.15, 0.40, 0.10, 0.05, 0.05, 0.03, 0.02],
+    [0.15, 0.20, 0.10, 0.35, 0.10, 0.05, 0.03, 0.02],
+    [0.20, 0.15, 0.10, 0.05, 0.40, 0.05, 0.03, 0.02],
+    [0.10, 0.10, 0.10, 0.10, 0.10, 0.20, 0.15, 0.15],  # Из O_1 можно остаться или ухудшить
+    [0.05, 0.05, 0.05, 0.05, 0.05, 0.10, 0.30, 0.35],
+    [0.01, 0.01, 0.01, 0.01, 0.01, 0.05, 0.10, 0.80]
+])
+
+Q0 = np.array([
+    [0.55, 0.20, 0.10, 0.05, 0.05, 0.03, 0.01, 0.01],  # При отказе вероятность O_k меньше
+    [0.30, 0.35, 0.15, 0.10, 0.05, 0.03, 0.01, 0.01],
+    [0.25, 0.20, 0.35, 0.10, 0.05, 0.03, 0.01, 0.01],
+    [0.20, 0.25, 0.10, 0.30, 0.10, 0.03, 0.01, 0.01],
+    [0.25, 0.20, 0.10, 0.05, 0.35, 0.03, 0.01, 0.01],
+    [0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.05, 0.05],  # При отказе быстрее выходим из O_k
+    [0.10, 0.10, 0.10, 0.10, 0.10, 0.20, 0.20, 0.10],
+    [0.05, 0.05, 0.05, 0.05, 0.05, 0.10, 0.15, 0.50]
+])
+
+# Пример заполнения R1 и R0 (упрощённо)
+R1 = np.array([
+    [50, 25, 10, 17, 13, -20, -40, -60],   # Для A-E штрафов нет
+    [18, 40, 10, 18, 15, -20, -50, -55],
+    [15, 19, 18, 14, 18, -15, -25, -30],
+    [12, 14, 18, 20, 11, -10, -30, -45],
+    [8, 10, 12, 18, 20, -15, -25, -50],
+    [20, 13, 14, 20, 12, -20, -40, -60],  # Для O_1, O_2, O_3...
+    [30, 15, 20, 5, 0, -40, -60, -80],
+    [30, 20, 10, 5, 0, -60, -80, -100]
+])
+
+R0 = np.array([
+    [38, 20, 12, 16, 20, -10, -20, -30],
+    [10, 40, 8, 10, 18, -15, -45, -50],
+    [6, 20, 10, 16, 18, -10, -15, -15],
+    [8, 12, 20, 18, 12, -5, -20, -30],
+    [8, 10, 12, 24, 20, -10, -25, -40],
+    [10, 5, 0, 5, 10, -10, -20, -20],  # При отказе штрафы меньше
+    [15, 10, 5, 7, 0, -20, -25, -30],
+    [20, 15, 10, 5, 0, -20, -30, -40]
+])
+# Кэширование
+policy_cache = {}
+revenue_cache = {}
+
+def calculate_expected_revenue(Q, R, state):
+    """Вычисляет ожидаемый доход для состояния"""
+    i = state_idx[state]
+    return np.sum(Q[i] * R[i])
+
+def optimal_policy(state, period, N):
+    """Рекурсивно вычисляет оптимальную политику"""
+    key = (state, period)
+    
+    if key in revenue_cache:
+        return policy_cache[key], revenue_cache[key]
+    
+    i = state_idx[state]
+    
+    # Базовый случай - последний период
+    if period == N:
+        W1 = calculate_expected_revenue(Q1, R1, state)
+        W0 = calculate_expected_revenue(Q0, R0, state)
+        policy = 1 if W1 > W0 else 0
+        revenue = max(W1, W0)
+        
+        policy_cache[key] = policy
+        revenue_cache[key] = revenue
+        return policy, revenue
+    
+    # Рекурсивный случай
+    W1 = calculate_expected_revenue(Q1, R1, state)
+    W0 = calculate_expected_revenue(Q0, R0, state)
+    
+    future_S1 = 0
+    future_S0 = 0
+    
+    for next_state in states:
+        _, future_rev = optimal_policy(next_state, period + 1, N)
+        j = state_idx[next_state]
+        future_S1 += Q1[i,j] * future_rev
+        future_S0 += Q0[i,j] * future_rev
+    
+    total_S1 = W1 + future_S1
+    total_S0 = W0 + future_S0
+    
+    policy = 1 if total_S1 > total_S0 else 0
+    revenue = max(total_S1, total_S0)
+    
+    policy_cache[key] = policy
+    revenue_cache[key] = revenue
+    
+    return policy, revenue
+
+def get_full_policy(N):
+    """Генерирует полную политику для всех периодов"""
+    results = []
+    for period in range(1, N + 1):
+        period_data = {'Период': period}
+        for state in states:
+            policy, revenue = optimal_policy(state, period, N)
+            period_data[state] = ('Принимать' if policy == 1 else 'Отказать') + f' ({revenue:.1f})'
+        results.append(period_data)
+    return results
+
+# Основная программа
+if __name__ == "__main__":
+    N = int(input("Введите количество периодов (N): "))
+    
+    # Очистка кэшей
+    policy_cache.clear()
+    revenue_cache.clear()
+    
+    # Расчет и вывод результатов
+    results = get_full_policy(N)
+    print("\nОптимальная политика овербукинга:")
+    print(tabulate(results, headers="keys", tablefmt="grid", stralign="center"))
+    
+    # Визуализация
+    plt.figure(figsize=(10, 6))
+    for state in states:
+        revenues = [optimal_policy(state, p, N)[1] for p in range(1, N+1)]
+        plt.plot(range(1, N+1), revenues, label=f'Состояние {state}', marker='o', linestyle='-', markersize=5)
+    
+    plt.xticks(range(1, N+1))  # Только целые периоды на оси X
+    plt.xlabel('Период')
+    plt.ylabel('Ожидаемый доход')
+    plt.title(f'Динамика доходов для {N} периодов')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
