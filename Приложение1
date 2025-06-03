@@ -55,18 +55,24 @@ gs = GridSpec(2, 1, height_ratios=[3, 1], figure=fig)
 ax1 = fig.add_subplot(gs[0])  # Для графика
 ax2 = fig.add_subplot(gs[1])  # Для таблицы
 
-# Собираем данные для таблицы
+# Собираем данные для таблицы и находим оптимальные k
 results_data = []
+optimal_points = []  # Будет хранить (k, revenue) для оптимальных точек
 for t, color in zip(t_values, colors):
     cache.clear()  # Очищаем кэш для каждого t
     revenues = [V(n, k, t) for k in k_values]
     max_revenue = max(revenues)
     best_k = k_values[revenues.index(max_revenue)]
     results_data.append([t, best_k, round(max_revenue, 2)])
+    optimal_points.append((best_k, max_revenue))  # Сохраняем оптимальные точки
     
-    # Строим график (без выделения точек пересечения)
-    ax1.plot(k_values, revenues, 'o-', color=color, 
-             label=f't = {t} дней', markersize=6, linewidth=2)
+    # Строим график
+    line, = ax1.plot(k_values, revenues, 'o-', color=color, 
+                     label=f't = {t} дней', markersize=6, linewidth=2)
+    
+    # Выделяем оптимальную точку (используем тот же цвет, что и линия)
+    ax1.plot(best_k, max_revenue, '*', color=color, markersize=12, 
+             markeredgewidth=1, markeredgecolor='black')
 
 # Настройка графика
 ax1.set_title('Оптимальное количество дополнительных бронирований', 
@@ -77,6 +83,12 @@ ax1.grid(True, linestyle='--', alpha=0.6)
 ax1.set_xticks(k_values)
 ax1.legend(fontsize=12, framealpha=0.9)
 ax1.tick_params(axis='both', which='major', labelsize=10)
+
+# Добавляем аннотации для оптимальных точек
+for (k, revenue), t in zip(optimal_points, t_values):
+    ax1.annotate(f'Оптимум (t={t})', xy=(k, revenue), xytext=(5, 10),
+                 textcoords='offset points', fontsize=10,
+                 arrowprops=dict(arrowstyle='->', color='gray'))
 
 # Создаем и настраиваем таблицу
 columns = ('Дней до рейса (t)', 'Оптимальное k', 'Максимальный доход ($)')
