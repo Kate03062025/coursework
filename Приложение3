@@ -1,0 +1,62 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from math import comb
+
+# Параметры модели
+C = 100        # Вместимость
+v = 10         # Допустимое перебронирование
+N = 50         # Количество этапов
+m = 2          # Количество классов
+r = [100, 10]  # Доходы от классов
+beta = 0.1     # Вероятность неявки
+a = 5          # Штраф за перебронирование
+q_n = 0.05     # Вероятность отмены заявки
+p_in_values = [0.3, 0.7]  # Вероятности прихода заявки от каждого класса
+p_reject = 1 - sum(p_in_values)  # Вероятность, что заявка не поступает
+
+# Функция штрафа за перебронирование
+def pi(y):
+    return a * max(y - C, 0)
+
+# Инициализация массива U[n, x]
+U = np.zeros((N + 1, C + v + 1))
+
+# Начальные условия при n = 0: ожидаемый штраф из-за неявки
+for x in range(C + v + 1):
+    U[0, x] = -sum(pi(y) * comb(x, y) * (1 - beta) ** y * beta ** (x - y) for y in range(x + 1))
+
+# Обратная рекурсия
+for n in range(1, N + 1):
+    for x in range(C + v + 1):
+        value = 0.0
+
+        # Обрабатываем заявки от каждого класса
+        for k in range(m):
+            p_k = p_in_values[k]
+            reward = r[k]
+
+            if x < C + v:
+                accept = reward + U[n - 1, x + 1]  # принимаем заявку
+            else:
+                accept = -np.inf  # не можем принять — переполнено
+
+            reject = U[n - 1, x]  # отклоняем заявку
+            value += p_k * max(accept, reject)
+
+        # Если заявка не поступает
+        value += p_reject * U[n - 1, x]
+
+        # Учитываем отмену бронирований
+        cancel_term = x * q_n * U[n - 1, max(x - 1, 0)]
+        value = cancel_term + (1 - x * q_n) * value
+
+        U[n, x] = value
+
+# Визуализация: функция ценности U[n, 0] по этапам
+plt.plot(range(N + 1), U[:, 0], label='U_n(0)')
+plt.xlabel('Этап (n)')
+plt.ylabel('U_n(0)')
+plt.title('Функция ценности U_n(0) от n')
+plt.legend()
+plt.grid(True)
+plt.show()
